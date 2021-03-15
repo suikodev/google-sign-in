@@ -1,67 +1,70 @@
-import { html, css, LitElement } from 'lit-element';
+import { html, LitElement } from 'lit-element';
 
 export class GoogleSignIn extends LitElement {
-  static get styles() {
-    return css`
-      :host {
-        display: block;
-        padding: 25px;
-        color: var(--google-sign-in-text-color, #000);
-      }
-    `;
-  }
 
   static get properties() {
     return {
-      title: { type: String },
-      counter: { type: Number },
+      clientId: { type: String, attribute: "client-id" },
     };
   }
 
   constructor() {
     super();
-    this.title = 'Hey there';
-    this.counter = 5;
-    this.script = this.script.bind(this);
-    this.onSignIn = this.onSignIn.bind(this);
+    this.clientId = "";
+    this.onGoogleScriptLoad = this.onGoogleScriptLoad.bind(this);
+    this.onAuthChange = this.onAuthChange.bind(this);
   }
 
   render() {
     return html`
-      <div class="g-signin2" data-onsuccess=${this.onSignIn}></div>
-      ${this.script()}
+      ${this.loadGoogleScript()}
+      <button id="google-sign-out" @click=${GoogleSignIn.signOut} style="display:none">sign out</button>
+      <button id="google-sign-in" @click=${GoogleSignIn.signIn}>sign in</button>
     `;
   }
 
-  onLoad() {
-    console.log(gapi);
+  onGoogleScriptLoad() {
     gapi.load("client:auth2", () => {
       gapi.auth2.init({
-        client_id: "828207170600-ba2r0cpgqu4sknf8ci46itbl8ss6doeb.apps.googleusercontent.com"
-      });
+        client_id: this.clientId
+      }).then(() => {
+        this.auth = window.gapi.auth2.getAuthInstance();
+        this.onAuthChange(this.auth.isSignedIn.get());
+        this.auth.isSignedIn.listen(this.onAuthChange);
+    });;
     });
   }
 
-  script() {
+  onAuthChange (isSignedIn) {
+    const signInButton =  this.shadowRoot.getElementById("google-sign-in");
+    const signOutButton = this.shadowRoot.getElementById("google-sign-out");
+    if (isSignedIn) {
+        signInButton.style.display = "none";
+        signOutButton.style.display = "block";
+        const profile = this.auth.currentUser.get().getBasicProfile();
+        window.localStorage.setItem("name", profile.getName());
+        window.localStorage.setItem("email", profile.getEmail());
+        window.localStorage.setItem("avatar", profile.getImageUrl());
+        window.localStorage.setItem("idToken",this.auth.currentUser.get().getAuthResponse().id_token);
+        // window.localStorage.setItem("")
+    } else{
+      signInButton.style.display = "block";
+      signOutButton.style.display = "none";
+    }
+};
+
+  static signIn() {
+    gapi.auth2.getAuthInstance().signIn();
+  }
+
+  static signOut() {
+    gapi.auth2.getAuthInstance().signOut();
+  }
+
+  loadGoogleScript() {
     const script = document.createElement('script');
-    script.onload = this.onLoad.bind(this);
+    script.onload = this.onGoogleScriptLoad;
     script.src = 'https://apis.google.com/js/platform.js';
     return script;
   }
-
-  onSignIn(googleUser) {
-    // Useful data for your client-side scripts:
-    const profile = googleUser.getBasicProfile();
-    console.log(`ID: ${  profile.getId()}`); // Don't send this directly to your server!
-    console.log(`Full Name: ${  profile.getName()}`);
-    console.log(`Given Name: ${  profile.getGivenName()}`);
-    console.log(`Family Name: ${  profile.getFamilyName()}`);
-    console.log(`Image URL: ${  profile.getImageUrl()}`);
-    console.log(`Email: ${  profile.getEmail()}`);
-
-    // The ID token you need to pass to your backend:
-    const {id_token} = googleUser.getAuthResponse();
-    console.log(`ID Token: ${  id_token}`);
-  }
-
 }
